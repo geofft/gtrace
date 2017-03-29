@@ -26,4 +26,6 @@ pub mod x86_64 {
     pub const ES: usize = 192;
     pub const FS: usize = 200;
     pub const GS: usize = 208;
+
+    pub const PAGE_SIZE: usize = 4096;
 }

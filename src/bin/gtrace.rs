@@ -18,6 +18,9 @@ fn print_syscall(tracee: &mut gtrace::Tracee) -> nix::Result<()> {
                     arg0,
                     String::from_utf8_lossy(&tracee.copy_from(arg1 as usize, arg2 as usize)?[..]),
                     arg2),
+        2 => print!("open({:?}, {})",
+                    String::from_utf8_lossy(&tracee.strncpy_from(arg0 as usize, libc::PATH_MAX as usize)?.0[..]),
+                    arg1),
         nr => print!("sys_{}(...)", nr)
     }
     Ok(())
