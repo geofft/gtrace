@@ -1,3 +1,11 @@
+extern crate serde;
+
+#[macro_use]
+extern crate serde_derive;
+
+#[macro_use]
+extern crate gtrace_derive;
+
 //extern crate libc;
 extern crate nix;
 
@@ -10,6 +18,7 @@ use nix::sys::ptrace::ptrace::*;
 use nix::Result;
 
 pub mod arch;
+pub mod syscall;
 
 pub fn traceme() -> std::io::Result<()> {
     match ptrace(PTRACE_TRACEME, 0, 0 as *mut _, 0 as *mut _) {
