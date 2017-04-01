@@ -20,7 +20,7 @@ pub enum Syscall {
     Write { fd: u64, buf: Buffer, count: u64 },
     Open { pathname: Buffer, flags: u64, mode: u64 }, // XXX Option
     Close { fd: u64 },
-    // XXX add support for printing nr
+    #[syscall(unknown)]
     Unknown { nr: u64, a: u64, b: u64, c: u64, d: u64, e: u64, f: u64 }
 }
 
