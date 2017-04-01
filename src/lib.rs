@@ -18,6 +18,7 @@ use nix::sys::ptrace::ptrace::*;
 use nix::Result;
 
 pub mod arch;
+pub mod decode;
 pub mod syscall;
 
 pub fn traceme() -> std::io::Result<()> {
@@ -77,11 +78,11 @@ impl Tracee {
         ptrace(PTRACE_SYSCALL, self.pid, 0 as *mut _, 0 as *mut _).map(drop)
     }
 
-    pub fn get_syscall(&mut self) -> Result<i64> {
-        ptrace(PTRACE_PEEKUSER, self.pid, arch::x86_64::ORIG_RAX as *mut _, 0 as *mut _)
+    pub fn get_syscall(&mut self) -> Result<u64> {
+        ptrace(PTRACE_PEEKUSER, self.pid, arch::x86_64::ORIG_RAX as *mut _, 0 as *mut _).map(|x| x as u64)
     }
 
-    pub fn get_arg(&mut self, reg: u8) -> Result<i64> {
+    pub fn get_arg(&mut self, reg: u8) -> Result<u64> {
         let offset = match reg {
             0 => arch::x86_64::RDI,
             1 => arch::x86_64::RSI,
@@ -91,7 +92,7 @@ impl Tracee {
             5 => arch::x86_64::R9,
             _ => panic!("there aren't that many registers")
         };
-        ptrace(PTRACE_PEEKUSER, self.pid, offset as *mut _, 0 as *mut _)
+        ptrace(PTRACE_PEEKUSER, self.pid, offset as *mut _, 0 as *mut _).map(|x| x as u64)
     }
 
     pub fn get_return(&mut self) -> Result<i64> {
