@@ -32,6 +32,34 @@ fn parse_open(tracee: &mut Tracee) -> Result<Syscall> {
     Ok(Syscall::Open { pathname: pathname, flags: flags, mode: mode })
 }
 
+fn parse_close(tracee: &mut Tracee) -> Result<Syscall> {
+    Ok(Syscall::Close { fd: tracee.get_arg(0)? })
+}
+
+fn parse_stat(tracee: &mut Tracee) -> Result<Syscall> {
+    let addr = tracee.get_arg(0)?;
+    let data = tracee.strncpy_from(addr as usize, PATH_MAX as usize)?.0;
+    let pathname = Buffer { addr : addr,
+                            data: Some(data) };
+    let buf = tracee.get_arg(1)?;
+    Ok(Syscall::Stat { pathname: pathname, buf: buf })
+}
+
+fn parse_fstat(tracee: &mut Tracee) -> Result<Syscall> {
+    let fd = tracee.get_arg(0)?;
+    let buf = tracee.get_arg(1)?;
+    Ok(Syscall::Fstat { fd: fd, buf: buf })
+}
+
+fn parse_lstat(tracee: &mut Tracee) -> Result<Syscall> {
+    let addr = tracee.get_arg(0)?;
+    let data = tracee.strncpy_from(addr as usize, PATH_MAX as usize)?.0;
+    let pathname = Buffer { addr : addr,
+                            data: Some(data) };
+    let buf = tracee.get_arg(1)?;
+    Ok(Syscall::Lstat { pathname: pathname, buf: buf })
+}
+
 fn parse_unknown(tracee: &mut Tracee, nr: u64) -> Result<Syscall> {
     Ok(Syscall::Unknown {
         nr: nr,
@@ -52,6 +80,15 @@ pub fn decode(tracee: &mut Tracee) -> Result<Syscall> {
         0 => parse_read(tracee),
         1 => parse_write(tracee),
         2 => parse_open(tracee),
+        3 => parse_close(tracee),
+        4 => parse_stat(tracee),
+        5 => parse_fstat(tracee),
+        6 => parse_lstat(tracee),
+        /*
+        8 => parse_lseek(tracee),
+        9 => parse_mmap(tracee),
+        10 => parse_mprotect(tracee),
+        */
         other => parse_unknown(tracee, other)
     }
 }
