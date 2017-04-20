@@ -114,7 +114,8 @@ impl Tracee {
             let n = {
                 try!(process_vm_readv(self.pid,
                                       &mut [IoVec::from_mut_slice(&mut res)],
-                                      &target[..]))
+                                      &target[..],
+                                      CmaFlags::empty()))
             };
             res.set_len(n);
         }
@@ -144,7 +145,8 @@ impl Tracee {
                 let n = {
                     try!(process_vm_readv(self.pid,
                                           &mut [IoVec::from_mut_slice(&mut res)],
-                                          &[IoVec::from_slice(std::slice::from_raw_parts(chunkaddr as *const u8, chunklen))]))
+                                          &[IoVec::from_slice(std::slice::from_raw_parts(chunkaddr as *const u8, chunklen))],
+                                          CmaFlags::empty()))
                 };
                 res.set_len(n);
             }
@@ -169,7 +171,8 @@ impl Tracee {
                     res.set_len(oldlen + chunklen);
                     match { process_vm_readv(self.pid,
                             &mut [IoVec::from_mut_slice(&mut res[oldlen..])],
-                            &[IoVec::from_slice(std::slice::from_raw_parts(chunkaddr as *const u8, chunklen))]) } {
+                            &[IoVec::from_slice(std::slice::from_raw_parts(chunkaddr as *const u8, chunklen))],
+                            CmaFlags::empty()) } {
                         Ok(n) => { res.set_len(n); }
                         Err(Sys(EFAULT)) => { return Ok((res, false)); }
                         Err(e) => { return Err(e); }
