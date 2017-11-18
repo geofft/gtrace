@@ -6,15 +6,12 @@ extern crate serde_derive;
 #[macro_use]
 extern crate gtrace_derive;
 
-//extern crate libc;
+extern crate libc;
 extern crate nix;
 
-use nix::libc;
-
-use libc::pid_t;
+use nix::unistd::Pid;
 use nix::sys::wait::WaitStatus;
-use nix::sys::ptrace::*;
-use nix::sys::ptrace::ptrace::*;
+use nix::sys::ptrace;
 use nix::Result;
 
 pub mod arch;
@@ -22,9 +19,10 @@ pub mod decode;
 pub mod syscall;
 
 pub fn traceme() -> std::io::Result<()> {
-    match ptrace(PTRACE_TRACEME, 0, 0 as *mut _, 0 as *mut _) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(std::io::Error::from(e))
+    match ptrace::traceme() {
+        Ok(()) => Ok(()),
+        Err(::nix::Error::Sys(errno)) => Err(std::io::Error::from_raw_os_error(errno as i32)),
+        Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 
@@ -32,7 +30,7 @@ pub enum TraceEvent {
     SysEnter,
     SysExit,
     Signal(u8),
-    Exit(i8),
+    Exit(i32),
 }
 
 enum State {
@@ -41,13 +39,14 @@ enum State {
 }
 
 pub struct Tracee {
-    pid: pid_t,
+    pid: Pid,
     state: State,
 }
 
 impl Tracee {
-    pub fn new(pid: pid_t) -> Tracee {
-        ptrace_setoptions(pid, PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC).unwrap();
+    pub fn new(pid: Pid) -> Tracee {
+        ptrace::setoptions(pid, ptrace::PTRACE_O_TRACESYSGOOD |
+                                ptrace::PTRACE_O_TRACEEXEC).unwrap();
         Tracee {
             pid: pid,
             state: State::Userspace,
@@ -75,11 +74,12 @@ impl Tracee {
     }
 
     pub fn run(&mut self) -> Result<()> {
-        ptrace(PTRACE_SYSCALL, self.pid, 0 as *mut _, 0 as *mut _).map(drop)
+        ptrace::syscall(self.pid)
     }
 
     pub fn get_syscall(&mut self) -> Result<u64> {
-        ptrace(PTRACE_PEEKUSER, self.pid, arch::x86_64::ORIG_RAX as *mut _, 0 as *mut _).map(|x| x as u64)
+        unsafe { ptrace::ptrace(ptrace::Request::PTRACE_PEEKUSER, self.pid,
+                                arch::x86_64::ORIG_RAX as *mut _, 0 as *mut _).map(|x| x as u64) }
     }
 
     pub fn get_arg(&mut self, reg: u8) -> Result<u64> {
@@ -92,11 +92,13 @@ impl Tracee {
             5 => arch::x86_64::R9,
             _ => panic!("there aren't that many registers")
         };
-        ptrace(PTRACE_PEEKUSER, self.pid, offset as *mut _, 0 as *mut _).map(|x| x as u64)
+        unsafe { ptrace::ptrace(ptrace::Request::PTRACE_PEEKUSER, self.pid,
+                                offset as *mut _, 0 as *mut _).map(|x| x as u64) }
     }
 
     pub fn get_return(&mut self) -> Result<i64> {
-        ptrace(PTRACE_PEEKUSER, self.pid, arch::x86_64::RAX as *mut _, 0 as *mut _)
+        unsafe { ptrace::ptrace(ptrace::Request::PTRACE_PEEKUSER, self.pid,
+                                arch::x86_64::RAX as *mut _, 0 as *mut _) }
     }
 
     /// Read len bytes from addr. May return fewer than len bytes if
@@ -109,13 +111,12 @@ impl Tracee {
         unsafe {
             res.set_len(len);
             let target: Vec<_> = PageIter::new(addr, len, arch::x86_64::PAGE_SIZE)
-                                 .map(|(a, l)| IoVec::from_slice(std::slice::from_raw_parts(a as *const _, l)))
+                                 .map(|(a, l)| RemoteIoVec { base: a, len: l })
                                  .collect();
             let n = {
                 try!(process_vm_readv(self.pid,
                                       &mut [IoVec::from_mut_slice(&mut res)],
-                                      &target[..],
-                                      CmaFlags::empty()))
+                                      &target[..]))
             };
             res.set_len(n);
         }
@@ -145,8 +146,7 @@ impl Tracee {
                 let n = {
                     try!(process_vm_readv(self.pid,
                                           &mut [IoVec::from_mut_slice(&mut res)],
-                                          &[IoVec::from_slice(std::slice::from_raw_parts(chunkaddr as *const u8, chunklen))],
-                                          CmaFlags::empty()))
+                                          &[RemoteIoVec { base: chunkaddr, len: chunklen }]))
                 };
                 res.set_len(n);
             }
@@ -171,8 +171,7 @@ impl Tracee {
                     res.set_len(oldlen + chunklen);
                     match { process_vm_readv(self.pid,
                             &mut [IoVec::from_mut_slice(&mut res[oldlen..])],
-                            &[IoVec::from_slice(std::slice::from_raw_parts(chunkaddr as *const u8, chunklen))],
-                            CmaFlags::empty()) } {
+                            &[RemoteIoVec { base: chunkaddr, len: chunklen }]) } {
                         Ok(n) => { res.set_len(n); }
                         Err(Sys(EFAULT)) => { return Ok((res, false)); }
                         Err(e) => { return Err(e); }
