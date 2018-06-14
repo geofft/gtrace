@@ -15,7 +15,7 @@ fn main() {
         cmd.arg(arg);
     }
     cmd.before_exec(gtrace::traceme);
-    let mut child = cmd.spawn().expect("child process failed");
+    let child = cmd.spawn().expect("child process failed");
     let pid = nix::unistd::Pid::from_raw(child.id() as libc::pid_t);
     let mut tracee = gtrace::Tracee::new(pid);
     loop {

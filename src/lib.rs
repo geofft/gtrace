@@ -45,8 +45,8 @@ pub struct Tracee {
 
 impl Tracee {
     pub fn new(pid: Pid) -> Tracee {
-        ptrace::setoptions(pid, ptrace::PTRACE_O_TRACESYSGOOD |
-                                ptrace::PTRACE_O_TRACEEXEC).unwrap();
+        ptrace::setoptions(pid, ptrace::Options::PTRACE_O_TRACESYSGOOD |
+                                ptrace::Options::PTRACE_O_TRACEEXEC).unwrap();
         Tracee {
             pid: pid,
             state: State::Userspace,
@@ -132,7 +132,7 @@ impl Tracee {
     pub fn strncpy_from(&mut self, addr: usize, len: usize) -> Result<(Vec<u8>, bool)> {
         use nix::sys::uio::*;
         use nix::Error::Sys;
-        use nix::Errno::EFAULT;
+        use nix::errno::Errno::EFAULT;
 
         let mut remote_pages = PageIter::new(addr, len, arch::x86_64::PAGE_SIZE);
 
