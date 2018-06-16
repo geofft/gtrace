@@ -2,7 +2,6 @@ extern crate libc;
 extern crate gtrace;
 extern crate nix;
 
-use std::env::Args;
 use std::os::unix::process::CommandExt;
 use std::process;
 use std::process::Command;
@@ -19,15 +18,12 @@ fn parse_args(args: &Vec<String>) -> Option<App> {
     let pos = args.iter().position(|ref x| x == &"-p");
 
     if let Some(pos) = pos {
-        println!("I'm here");
         let pid = args.iter().nth(pos + 1).expect("Can't find PID");
         let pid = pid.parse::<libc::pid_t>().expect("Can't parse PID");
         return Some(App::Attach(pid));
     } else {
         let name = args.first();
-        println!("{:?}", name);
         let args = args.iter().skip(1).cloned().collect();
-        println!("{:?}", args);
         return name.map(|x| App::Run(x.to_string(), args));
     }
 }
@@ -42,12 +38,11 @@ fn get_tracee(app: App) -> (Option<process::Child>, nix::unistd::Pid, gtrace::Tr
             cmd.before_exec(gtrace::traceme);
             let child = cmd.spawn().expect("child process failed");
             let pid = nix::unistd::Pid::from_raw(child.id() as libc::pid_t);
-            return (Some(child), pid, gtrace::Tracee::new(pid));
+            (Some(child), pid, gtrace::Tracee::new(pid))
         }
         App::Attach(pid) => {
             let pid = nix::unistd::Pid::from_raw(pid);
-            println!("{:?}", pid);
-            (None, pid, gtrace::Tracee::new(pid))
+            (None, pid, gtrace::Tracee::attach(pid))
         }
     }
 }
