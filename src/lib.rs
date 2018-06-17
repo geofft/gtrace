@@ -45,8 +45,23 @@ pub struct Tracee {
 
 impl Tracee {
     pub fn new(pid: Pid) -> Tracee {
-        ptrace::setoptions(pid, ptrace::PTRACE_O_TRACESYSGOOD |
-                                ptrace::PTRACE_O_TRACEEXEC).unwrap();
+        ptrace::setoptions(
+            pid,
+            ptrace::Options::PTRACE_O_TRACESYSGOOD | ptrace::Options::PTRACE_O_TRACEEXEC,
+        ).unwrap();
+        Tracee {
+            pid: pid,
+            state: State::Userspace,
+        }
+    }
+
+    pub fn attach(pid: Pid) -> Tracee {
+        ptrace::attach(pid).unwrap();
+        ptrace::setoptions(
+            pid,
+            ptrace::Options::PTRACE_O_TRACESYSGOOD | ptrace::Options::PTRACE_O_TRACEEXEC,
+        ).unwrap();
+
         Tracee {
             pid: pid,
             state: State::Userspace,
@@ -57,13 +72,13 @@ impl Tracee {
         match status {
             WaitStatus::PtraceSyscall(_) => {
                 match self.state {
-                    State::Userspace => {
-                        self.state = State::Kernelspace;
-                        TraceEvent::SysEnter
+                State::Userspace => {
+                    self.state = State::Kernelspace;
+                    TraceEvent::SysEnter
                     },
-                    State::Kernelspace => {
-                        self.state = State::Userspace;
-                        TraceEvent::SysExit
+                State::Kernelspace => {
+                    self.state = State::Userspace;
+                    TraceEvent::SysExit
                     },
                 }
             }
@@ -111,11 +126,11 @@ impl Tracee {
         unsafe {
             res.set_len(len);
             let target: Vec<_> = PageIter::new(addr, len, arch::x86_64::PAGE_SIZE)
-                                 .map(|(a, l)| RemoteIoVec { base: a, len: l })
-                                 .collect();
+                .map(|(a, l)| RemoteIoVec { base: a, len: l })
+                .collect();
             let n = {
                 try!(process_vm_readv(self.pid,
-                                      &mut [IoVec::from_mut_slice(&mut res)],
+                    &mut [IoVec::from_mut_slice(&mut res)],
                                       &target[..]))
             };
             res.set_len(n);
@@ -132,7 +147,7 @@ impl Tracee {
     pub fn strncpy_from(&mut self, addr: usize, len: usize) -> Result<(Vec<u8>, bool)> {
         use nix::sys::uio::*;
         use nix::Error::Sys;
-        use nix::Errno::EFAULT;
+        use nix::errno::Errno::EFAULT;
 
         let mut remote_pages = PageIter::new(addr, len, arch::x86_64::PAGE_SIZE);
 
@@ -145,7 +160,7 @@ impl Tracee {
                 res.set_len(chunklen);
                 let n = {
                     try!(process_vm_readv(self.pid,
-                                          &mut [IoVec::from_mut_slice(&mut res)],
+                        &mut [IoVec::from_mut_slice(&mut res)],
                                           &[RemoteIoVec { base: chunkaddr, len: chunklen }]))
                 };
                 res.set_len(n);
@@ -175,8 +190,8 @@ impl Tracee {
                         Ok(n) => { res.set_len(n); }
                         Err(Sys(EFAULT)) => { return Ok((res, false)); }
                         Err(e) => { return Err(e); }
-                    }
-                }
+                        }
+                        }
             }
         }
     }
@@ -218,9 +233,9 @@ fn test_page_iter() {
         assert_eq!(iov, v);
     }
 
-    check(3, 5,   vec![(3, 5)]);
-    check(3, 21,  vec![(3, 7), (10, 10), (20, 4)]);
+    check(3, 5, vec![(3, 5)]);
+    check(3, 21, vec![(3, 7), (10, 10), (20, 4)]);
     check(10, 10, vec![(10, 10)]);
     check(10, 11, vec![(10, 10), (20, 1)]);
-    check(10, 0,  vec![]);
+    check(10, 0, vec![]);
 }
